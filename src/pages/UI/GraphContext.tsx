@@ -6,12 +6,11 @@ import React, {
   ReactNode
 } from 'react'
 import { notifications } from '@mantine/notifications'
-import { DraggableNode, NodeDefinition } from '../../components/types/NodeDefinition' // Adjust path as needed
-import { AppFile } from '../../App' // Adjust path as needed
+import { DraggableNode, NodeDefinition } from '../../components/types/NodeDefinition'
+import { AppFile } from '../../App'
 import { nanoid } from 'nanoid'
-import { nodeActions as nodeRegistry } from '../../components/nodeRegistry'; // Import nodeRegistry
+import { nodeActions as nodeRegistry } from '../../components/nodeRegistry';
 
-// Your existing type definitions
 export const FUNC_PREFIX = 'func:'
 export const EVENT_PREFIX = 'event:'
 
@@ -22,9 +21,7 @@ export interface GraphData {
   nodes: DraggableNode[]
   parameters?: string[] // For functions
   argumentNames?: string[] // For events
-  scope?: FunctionScope | EventScope // For functions and events
-  // 'file' type graphs (client/server scripts) might use scope to indicate client/server,
-  // or it's inferred from the key. Let's assume scope is explicitly set.
+  scope?: FunctionScope | EventScope
 }
 
 export interface ProjectMetadata {
@@ -42,11 +39,12 @@ export interface ProjectSaveData {
 // --- Context State and Actions ---
 export interface GraphContextState {
   graphs: Record<string, GraphData>
-  isDirty: boolean // <<< ADDED: Tracks unsaved changes
+  files: AppFile[] // <<< ADDED: Centralized file list
+  isDirty: boolean
 }
 
 export interface GraphContextActions {
-  // Graph structure modification
+  // Graph node modification
   addNodeToGraph: (graphKey: string, nodeTemplate: DraggableNode) => void
   reorderNodes: (graphKey: string, from: number, to: number) => void
   updateNode: (
@@ -57,7 +55,9 @@ export interface GraphContextActions {
   deleteNodeFromGraph: (graphKey: string, nodeIndex: number) => void
 
   // File/Function/Event graph management
-  addFileGraph: (fileKey: string, type: 'client' | 'server') => boolean // Returns true if added, false if exists
+  addFile: (file: AppFile) => boolean // <<< REVISED
+  deleteFile: (file: AppFile) => void // <<< REVISED
+
   addFunctionGraph: (
     funcName: string,
     scope: FunctionScope,
@@ -89,10 +89,10 @@ export interface GraphContextActions {
   getAllFileKeys: () => string[] // Helper to get all non-function/event keys
 
   // Project Save/Load
-  loadGraphs: (
+  loadProject: (
     projectData: ProjectSaveData
-  ) => { success: boolean; loadedFiles?: AppFile[]; message?: string }
-  clearDirtyFlag: () => void // <<< ADDED: To manually clear dirty state if needed (e.g., after save)
+  ) => { success: boolean; message?: string } // <<< REVISED
+  clearDirtyFlag: () => void
 }
 
 export type GraphContextType = GraphContextState & GraphContextActions
@@ -101,14 +101,15 @@ const GraphContext = createContext<GraphContextType | undefined>(undefined)
 
 export const GraphProvider = ({ children }: { children: ReactNode }) => {
   const [graphs, setGraphs] = useState<Record<string, GraphData>>({})
-  const [isDirty, setIsDirty] = useState(false) // <<< INITIALIZED
+  const [files, setFiles] = useState<AppFile[]>([]) // <<< ADDED
+  const [isDirty, setIsDirty] = useState(false)
 
   const clearDirtyFlag = useCallback(() => {
     console.log('GraphContext: Clearing dirty flag')
     setIsDirty(false)
   }, [])
 
-  // --- MUTATOR FUNCTIONS (Examples - you need to implement all of them) ---
+  // --- MUTATOR FUNCTIONS ---
 
   const addNodeToGraph = useCallback(
     (graphKey: string, nodeTemplate: DraggableNode) => {
@@ -128,7 +129,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         }
       })
       console.log('GraphContext: Setting dirty flag (addNodeToGraph)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
     },
     []
   )
@@ -144,7 +145,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         return { ...prev, [graphKey]: { ...graph, nodes: newNodes } }
       })
       console.log('GraphContext: Setting dirty flag (reorderNodes)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
     },
     []
   )
@@ -159,7 +160,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         return { ...prev, [graphKey]: { ...graph, nodes: newNodes } }
       })
       console.log('GraphContext: Setting dirty flag (updateNode)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
     },
     []
   )
@@ -181,26 +182,45 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         return { ...prev, [graphKey]: { ...graph, nodes: newNodes } }
       })
       console.log('GraphContext: Setting dirty flag (deleteNodeFromGraph)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
     },
     []
   )
 
-  const addFileGraph = useCallback(
-    (fileKey: string, type: 'client' | 'server'): boolean => {
-      if (graphs[fileKey]) {
-        return false // Already exists
+  const addFile = useCallback(
+    (fileToAdd: AppFile): boolean => {
+      const fileKey = `${fileToAdd.type}/${fileToAdd.name}`;
+      if (graphs[fileKey] || files.some(f => f.name.toLowerCase() === fileToAdd.name.toLowerCase() && f.type === fileToAdd.type)) {
+        notifications.show({ title: 'File Exists', message: `File "${fileToAdd.name}.lua" (${fileToAdd.type}) already exists.`, color: 'yellow', autoClose: 3500 });
+        return false;
       }
-      setGraphs(prev => ({
-        ...prev,
-        [fileKey]: { nodes: [], scope: type }
-      }))
-      console.log('GraphContext: Setting dirty flag (addFileGraph)')
-      setIsDirty(true) // <<< SET DIRTY
-      return true
+
+      setGraphs(prev => ({ ...prev, [fileKey]: { nodes: [], scope: fileToAdd.type } }));
+      setFiles(prev => [...prev, fileToAdd]);
+
+      console.log('GraphContext: Setting dirty flag (addFile)');
+      setIsDirty(true);
+      return true;
     },
-    [graphs]
-  )
+    [graphs, files]
+  );
+
+  const deleteFile = useCallback(
+    (fileToDelete: AppFile) => {
+      const fileKey = `${fileToDelete.type}/${fileToDelete.name}`;
+      
+      setGraphs(prev => {
+        const newGraphs = { ...prev };
+        delete newGraphs[fileKey];
+        return newGraphs;
+      });
+      setFiles(prev => prev.filter(f => !(f.name === fileToDelete.name && f.type === fileToDelete.type)));
+
+      console.log('GraphContext: Setting dirty flag (deleteFile)');
+      setIsDirty(true);
+    },
+    []
+  );
 
   const addFunctionGraph = useCallback(
     (
@@ -217,7 +237,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         [graphKey]: { nodes: [], parameters, scope }
       }))
       console.log('GraphContext: Setting dirty flag (addFunctionGraph)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
       return true
     },
     [graphs]
@@ -238,7 +258,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         [graphKey]: { nodes: [], argumentNames, scope }
       }))
       console.log('GraphContext: Setting dirty flag (addEventGraph)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
       return true
     },
     [graphs]
@@ -251,7 +271,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
       return newGraphs;
     })
     console.log('GraphContext: Setting dirty flag (deleteGraph)')
-    setIsDirty(true) // <<< SET DIRTY
+    setIsDirty(true)
   }, [])
 
   const getGraph = useCallback(
@@ -272,7 +292,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         }
       })
       console.log('GraphContext: Setting dirty flag (updateFunctionSettings)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
     },
     []
   )
@@ -288,7 +308,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
         }
       })
       console.log('GraphContext: Setting dirty flag (updateEventSettings)')
-      setIsDirty(true) // <<< SET DIRTY
+      setIsDirty(true)
     },
     []
   )
@@ -311,11 +331,10 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
     );
   }, [graphs]);
 
-
-  const loadGraphs = useCallback(
+  const loadProject = useCallback(
     (
       projectData: ProjectSaveData
-    ): { success: boolean; loadedFiles?: AppFile[]; message?: string } => {
+    ): { success: boolean; message?: string } => {
       try {
         if (
           !projectData ||
@@ -333,7 +352,6 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
             if (!savedGraphData) continue;
 
             const rehydratedNodes: DraggableNode[] = (savedGraphData.nodes || []).map(savedNode => {
-              // `savedNode` here is just the plain object from JSON, without leftSection/execute
               const nodeDefinitionFromRegistry = nodeRegistry.find(def => def.id === savedNode.id);
               
               if (!nodeDefinitionFromRegistry) {
@@ -347,16 +365,13 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
                 return null; // Skip this node
               }
 
-              // Important: savedNode should only contain ID and configurable properties.
-              // Properties like leftSection, execute, category, etc., should come from nodeDefinitionFromRegistry.
               const nodeSpecificSavedProps = { ...savedNode } as Partial<DraggableNode>;
               delete nodeSpecificSavedProps.id; 
               
               const rehydratedNode: DraggableNode = {
-                ...nodeDefinitionFromRegistry,        // 1. Start with everything from registry (icons, execute, default labels, etc.)
-                ...nodeSpecificSavedProps,            // 2. Override with user-saved configurable properties
-                runtimeId: nanoid(10),                // 3. Assign new runtimeId
-                // 4. Ensure critical definition properties are definitely from registry
+                ...nodeDefinitionFromRegistry,
+                ...nodeSpecificSavedProps,
+                runtimeId: nanoid(10),
                 id: nodeDefinitionFromRegistry.id, 
                 leftSection: nodeDefinitionFromRegistry.leftSection,
                 execute: nodeDefinitionFromRegistry.execute,
@@ -364,20 +379,21 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
                 allowedGraphTypes: nodeDefinitionFromRegistry.allowedGraphTypes,
               };
               return rehydratedNode;
-            }).filter(node => node !== null) as DraggableNode[]; // Filter out any nulls (skipped nodes)
+            }).filter(node => node !== null) as DraggableNode[];
 
             loadedGraphsData[graphKey] = {
-              ...savedGraphData, // Keep other graph metadata like parameters, argumentNames, scope
+              ...savedGraphData,
               nodes: rehydratedNodes,
             };
           }
         }
         setGraphs(loadedGraphsData);
-        console.log('GraphContext: Clearing dirty flag (loadGraphs)')
-        setIsDirty(false) // <<< CLEAR DIRTY ON SUCCESSFUL LOAD
-        return { success: true, loadedFiles: projectData.files }
+        setFiles(projectData.files); // <<< SET FILES
+        console.log('GraphContext: Clearing dirty flag (loadProject)')
+        setIsDirty(false); // <<< CLEAR DIRTY ON SUCCESSFUL LOAD
+        return { success: true }
       } catch (error: any) {
-        console.error('Error loading graphs into context:', error)
+        console.error('Error loading project into context:', error)
         notifications.show({
           title: 'Project Load Error',
           message: `Failed to load project data into context: ${error.message}`,
@@ -394,12 +410,14 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
 
   const contextValue: GraphContextType = {
     graphs,
+    files,
     isDirty,
     addNodeToGraph,
     reorderNodes,
     updateNode,
     deleteNodeFromGraph,
-    addFileGraph,
+    addFile,
+    deleteFile,
     addFunctionGraph,
     addEventGraph,
     deleteGraph,
@@ -409,7 +427,7 @@ export const GraphProvider = ({ children }: { children: ReactNode }) => {
     getFunctionNames,
     getEventNames,
     getAllFileKeys,
-    loadGraphs,
+    loadProject,
     clearDirtyFlag
   }
 

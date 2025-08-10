@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { IconTablePlus } from '@tabler/icons-react';
 import { NodeDefinition } from '../types/NodeDefinition';
@@ -13,15 +12,13 @@ export const CreateTableNode: NodeDefinition = {
   leftSection: <IconTablePlus size={40} />,
   
   allowedGraphTypes: ['file', 'function', 'event'],
-  varType: 'local', 
+  varType: 'local', // Added default value
   variableName: 'newTable',
 
   execute: function(context: ExecutionContext) {
     const varName = this.variableName;
 
     if (!isValidLuaIdentifier(varName)) {
-       console.error(`CreateTableNode: Invalid variable name "${varName}".`);
-       
        return { action: 'createTable', status: 'error', variableName: varName, message: 'Invalid variable name' };
     }
 

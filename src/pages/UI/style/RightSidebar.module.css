@@ -1,26 +1,21 @@
 .fileItem {
     border-radius: var(--mantine-radius-sm);
     cursor: pointer;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    /* Default background is set inline based on selection */
-    /* Default border is set inline based on selection */
+    padding: var(--mantine-spacing-xs);
+    
+    /* Use CSS variables for dynamic styling from props */
+    background-color: var(--item-bg-color);
+    border: 1px solid var(--item-border-color);
 }
 
 /* Hover effect for non-selected items */
-.fileItem:not([style*="border-color: transparent"]) { /* Target only non-selected items based on border */
-   /* Add specific selection indicator if needed */
+.fileItem:not([data-selected='true']):hover {
+    background-color: var(--mantine-color-dark-5);
 }
-.fileItem:hover:not([style*="border-color: transparent"]) { /* This attempts to select non-selected items, might be tricky with inline styles */
-    /* background-color: #373A40; */ /* Use var(--mantine-color-dark-5) or similar */
-}
-/* A potentially more reliable way if background is used for selection state */
-.fileItem:hover:not([style*="background-color: rgb(59, 91, 219)"]):not([style*="background-color: rgb(217, 168, 0)"]) { /* Check against compiled color values */
-   background-color: #373A40 !important; /* Use !important carefully if needed to override inline style */
-}
-
 
 /* Delete Button Styling */
 .deleteButton {

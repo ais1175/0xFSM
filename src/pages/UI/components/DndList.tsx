@@ -43,7 +43,8 @@ export function DndList ({
   }
 
   const draggables = items.map((node, index) => {
-    console.log('test log: ' + JSON.stringify(node, null, 2))
+    // CRITICAL FIX: Removed console.log with JSON.stringify(node) which crashes
+    // because `node.leftSection` is a React component and cannot be stringified.
     return (
       <Draggable
         key={node.runtimeId}
@@ -76,7 +77,7 @@ export function DndList ({
               </div>
             </Tooltip>
 
-            {/* Node Icon/Symbol Area <<< FIX: Check if leftSection is valid element >>> */}
+            {/* Node Icon/Symbol Area */}
             <Box mr='sm' className={classes.iconSection}>
               {React.isValidElement(node.leftSection) ? (
                 node.leftSection
@@ -96,19 +97,11 @@ export function DndList ({
 
             {/* Action Icons */}
             <Group gap={5} wrap='nowrap' style={{ flexShrink: 0 }}>
-              <Text size='xs' c='dimmed' truncate>
-                {node.value ||
-                  node.name ||
-                  node.nativeNameOrHash ||
-                  node.functionName ||
-                  node.eventName ||
-                  node.variableName ||
-                  node.tableVariable ||
-                  node.resultVariable ||
-                  node.message ||
-                  'No description'}
-              </Text>
-              <Tooltip label='Edit Node Properties' withArrow openDelay={500}>
+              <Tooltip
+                label='Edit Node Properties'
+                withArrow
+                openDelay={500}
+              >
                 <ActionIcon
                   variant='subtle'
                   color='blue'
@@ -117,7 +110,6 @@ export function DndList ({
                   aria-label={`Edit node ${node.label || 'Unnamed Node'}`}
                   onClick={() => handleOpenEditor(node, index)}
                 >
-                  
                   <IconSettings size='1rem' stroke={1.5} />
                 </ActionIcon>
               </Tooltip>
@@ -133,7 +125,6 @@ export function DndList ({
                     handleDeleteClick(index)
                   }}
                 >
-                  
                   <IconTrash size='1rem' stroke={1.5} />
                 </ActionIcon>
               </Tooltip>
@@ -152,7 +143,6 @@ export function DndList ({
             {...provided.droppableProps}
             ref={provided.innerRef}
             className={classes.droppableArea}
-            
             style={{padding: '5px' }}
           >
             {draggables}

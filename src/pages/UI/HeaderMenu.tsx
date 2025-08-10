@@ -134,7 +134,7 @@ export function HeaderMenu ({
             <Text c='blue' fw={700} size='xl'>
               0xFSM
             </Text>
-            <Code fw={700}>v1.0.0</Code>
+            <Code fw={700}>v1.0.1</Code>
             <Button variant='gradient' gradient={{ from: 'pink', to: 'green' }} size="xs" onClick={() => window.open('https://ko-fi.com/ahmedbero', '_blank')} leftSection={<IconCoffee size={16} stroke={1.5} />} visibleFrom='sm' >
               Support Me
             </Button>

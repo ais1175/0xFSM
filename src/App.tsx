@@ -93,17 +93,17 @@ function getNodeSaveData (
 
 function AppContent () {
   const [selectedGraphKey, setSelectedGraphKey] = useState<string | null>(null);
-  const [files, setFiles] = useState<AppFile[]>([]); // This represents the list of AppFile (client/server script files)
   const [isGenerationModalOpen, setIsGenerationModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const saveLoadWrapperRef = useRef<{ save: () => void; load: (projectData: ProjectSaveData) => void; }>(null);
+  const saveLoadWrapperRef = useRef<{ save: () => void; }>(null);
   
   const { 
-    addFileGraph, 
-    deleteGraph, 
-    loadGraphs,
-    isDirty,         // <<< FROM GraphContext
-    clearDirtyFlag   // <<< FROM GraphContext
+    files, // <<< GET FROM CONTEXT
+    addFile, // <<< USE NEW CONTEXT ACTION
+    deleteFile, // <<< USE NEW CONTEXT ACTION
+    loadProject,
+    isDirty,
+    clearDirtyFlag
   } = useGraphContext();
 
   // Effect to handle unsaved changes warning
@@ -126,31 +126,22 @@ function AppContent () {
   }, [isDirty]); // Re-run effect if isDirty status changes
 
   const handleAddFile = useCallback( (fileToAdd: AppFile) => {
-    const alreadyExists = files.some( f => f.name.toLowerCase() === fileToAdd.name.toLowerCase() && f.type === fileToAdd.type );
-    if (alreadyExists) {
-      notifications.show({ title: 'File Exists', message: `File "${fileToAdd.name}.lua" (${fileToAdd.type}) already exists.`, color: 'yellow', autoClose: 3500 });
-      return;
-    }
-    
-    const fileKey = `${fileToAdd.type}/${fileToAdd.name}`;
-    const success = addFileGraph(fileKey, fileToAdd.type); // This should set isDirty in GraphContext
+    const success = addFile(fileToAdd);
     
     if (success) {
-      const newFiles = [...files, fileToAdd];
-      setFiles(newFiles); // Update App's local list of files
+      const fileKey = `${fileToAdd.type}/${fileToAdd.name}`;
       setSelectedGraphKey(fileKey);
       notifications.show({ title: 'File Created', message: `Created ${fileToAdd.type}/${fileToAdd.name}.lua`, color: 'green', autoClose: 2500 });
     } else {
-      // This case should ideally be caught by `alreadyExists` or GraphContext returning false
-      notifications.show({ title: 'Error', message: `Could not create file "${fileToAdd.name}.lua". It might already exist in the graph data.`, color: 'red', autoClose: 3500 });
+      // Notification for existing file is handled in context now
+      notifications.show({ title: 'Error', message: `Could not create file "${fileToAdd.name}.lua".`, color: 'red', autoClose: 3500 });
     }
-  }, [files, addFileGraph] );
+  }, [addFile] );
 
   const handleDeleteFile = useCallback( (fileToDelete: AppFile) => {
     const fileKey = `${fileToDelete.type}/${fileToDelete.name}`;
     try {
-      deleteGraph(fileKey); // This should set isDirty in GraphContext
-      setFiles(prev => prev.filter( f => !(f.name === fileToDelete.name && f.type === fileToDelete.type) ));
+      deleteFile(fileToDelete); // Call context action
       if (selectedGraphKey === fileKey) {
         setSelectedGraphKey(null);
       }
@@ -159,7 +150,7 @@ function AppContent () {
       console.error( `App: Error during handleDeleteFile for key ${fileKey}:`, error );
       notifications.show({ title: 'Deletion Error', message: `An error occurred while deleting "${fileToDelete.name}.lua".`, color: 'red' });
     }
-  }, [selectedGraphKey, deleteGraph] );
+  }, [selectedGraphKey, deleteFile] );
 
   const handleSelectGraph = useCallback((key: string | null) => {
     setSelectedGraphKey(key);
@@ -195,11 +186,10 @@ function AppContent () {
           throw new Error('Invalid project file structure.');
         }
         
-        // loadGraphs in GraphContext should clear the dirty flag
-        const loadResult = loadGraphs(loadedProjectData); 
+        // Context now handles setting graphs and files, and clearing dirty flag
+        const loadResult = loadProject(loadedProjectData); 
         
-        if (loadResult.success && loadResult.loadedFiles) {
-          setFiles(loadResult.loadedFiles); // Update App's file list
+        if (loadResult.success) {
           setSelectedGraphKey(null);
           notifications.show({ title: 'Project Loaded', message: `Successfully loaded project "${file.name}".`, color: 'green', autoClose: 3500 });
         } else {
@@ -217,7 +207,7 @@ function AppContent () {
       notifications.show({ title: 'File Read Error', message: 'Could not read the selected file.', color: 'red', autoClose: 5000 });
     };
     reader.readAsText(file);
-  }, [loadGraphs] ); 
+  }, [loadProject] ); 
 
   return (
     <Box style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
@@ -234,8 +224,8 @@ function AppContent () {
           <RightSidebar files={files} selectedGraphKey={selectedGraphKey} onSelectGraph={handleSelectGraph} onAddFile={handleAddFile} onDeleteFile={handleDeleteFile} />
         </Box>
       </Flex>
-      <GenerationModalWrapper opened={isGenerationModalOpen} onClose={closeGenerationModal} appFiles={files} />
-      <SaveLoadWrapper ref={saveLoadWrapperRef} appFiles={files} onSaveSuccess={clearDirtyFlag} />
+      <GenerationModalWrapper opened={isGenerationModalOpen} onClose={closeGenerationModal} />
+      <SaveLoadWrapper ref={saveLoadWrapperRef} onSaveSuccess={clearDirtyFlag} />
     </Box>
   );
 }
@@ -253,21 +243,23 @@ export default function App () {
   );
 }
 
-function GenerationModalWrapper ({ opened, onClose, appFiles }: { opened: boolean; onClose: () => void; appFiles: AppFile[] }) {
-  const { graphs } = useGraphContext();
+// Wrapper doesn't need to pass files down anymore, it gets them from context
+function GenerationModalWrapper ({ opened, onClose }: { opened: boolean; onClose: () => void; }) {
+  const { graphs, files } = useGraphContext();
   if (!opened) return null;
-  return ( <CodeGenerationModal opened={opened} onClose={onClose} graphsData={graphs || {}} filesData={appFiles} /> );
+  return ( <CodeGenerationModal opened={opened} onClose={onClose} graphsData={graphs || {}} filesData={files} /> );
 }
 
+// Wrapper doesn't need to receive files from props anymore
 const SaveLoadWrapper = forwardRef<
-  { save: () => void; load: (projectData: ProjectSaveData) => void },
-  { appFiles: AppFile[]; onSaveSuccess: () => void }
->(({ appFiles, onSaveSuccess }, ref) => {
-  const { graphs, loadGraphs: contextLoadGraphs } = useGraphContext(); 
+  { save: () => void; },
+  { onSaveSuccess: () => void }
+>(({ onSaveSuccess }, ref) => {
+  const { graphs, files } = useGraphContext(); 
 
   useImperativeHandle( ref, () => ({
     save: () => {
-      if (!graphs || !appFiles) {
+      if (!graphs || !files) {
         notifications.show({ title: 'Save Error', message: 'Missing graph or file data.', color: 'red' });
         return;
       }
@@ -288,7 +280,7 @@ const SaveLoadWrapper = forwardRef<
         }
         const saveData: ProjectSaveData = {
           projectMetadata: { savedAt: new Date().toISOString(), appName: '0xFSM', appVersion: '1.0.0' },
-          files: [...appFiles],
+          files: [...files], // Use files from context
           graphs: graphsToSave
         };
         const jsonString = JSON.stringify(saveData, null, 2);
@@ -300,19 +292,7 @@ const SaveLoadWrapper = forwardRef<
       } catch (error: any) {
         notifications.show({ title: 'Save Error', message: `Failed to save: ${error.message}`, color: 'red', autoClose: 5000 });
       }
-    },
-    load: (loadedProjectData: ProjectSaveData) => {
-      if (typeof contextLoadGraphs === 'function') {
-        const result = contextLoadGraphs(loadedProjectData);
-        if (result.success) {
-            notifications.show({ title: 'Project Data Processed', message: `Project data processed by SaveLoadWrapper.`, color: 'green', autoClose: 3000 });
-        } else {
-            notifications.show({ title: 'Load Error', message: result.message || 'Failed to process project data via SaveLoadWrapper.', color: 'red', autoClose: 5000 });
-        }
-      } else {
-        console.error( 'SaveLoadWrapper: contextLoadGraphs function unavailable.' );
-      }
     }
-  }), [graphs, appFiles, contextLoadGraphs, onSaveSuccess] ); 
+  }), [graphs, files, onSaveSuccess] ); 
   return null;
 });

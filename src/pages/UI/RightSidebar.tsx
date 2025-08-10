@@ -5,7 +5,6 @@ import {
   Stack,
   Text,
   Box,
-  Badge,
   ActionIcon,
   Group,
   Tooltip
@@ -26,8 +25,8 @@ interface RightSidebarProps {
   files: AppFile[]
   selectedGraphKey: string | null
   onSelectGraph: (graphKey: string | null) => void
-  onAddFile: (file: AppFile) => void // Callback to notify App to add file to its state
-  onDeleteFile: (file: AppFile) => void // <<< Callback to notify App to delete file
+  onAddFile: (file: AppFile) => void
+  onDeleteFile: (file: AppFile) => void
 }
 
 export default function RightSidebar ({
@@ -39,53 +38,40 @@ export default function RightSidebar ({
 }: RightSidebarProps) {
   const [modalOpen, setModalOpen] = useState(false)
 
-  // Style Constants (can be removed if using CSS module primarily)
-  const clientBgColor = '#3b5bdb'
-  const serverBgColor = '#d9a800'
-  const defaultBgColor = '#2C2E33'
-  const hoverBgColor = '#373A40'
-  const listBgColor = '#1F2023'
+  // Style Constants
+  const clientBgColor = 'var(--mantine-color-blue-light-color)'
+  const serverBgColor = 'var(--mantine-color-orange-light-color)'
   const selectedTextColor = '#FFFFFF'
-  const defaultTextColor = '#C1C2C5'
+  const defaultTextColor = 'var(--mantine-color-dark-0)'
+  const listBgColor = 'var(--mantine-color-dark-8)'
 
   const handleCreateFileClick = () => setModalOpen(true)
 
   const handleCreateFile = (file: AppFile) => {
-    console.log('RightSidebar: Calling onAddFile prop with:', file)
     onAddFile(file)
   }
 
   const handleSelectFile = (file: AppFile) => {
     const fileKey = `${file.type}/${file.name}`
-    console.log(`RightSidebar: Calling onSelectGraph prop with key: ${fileKey}`)
     onSelectGraph(fileKey)
   }
 
   const handleDeleteFileClick = (fileToDelete: AppFile) => {
-    const fileKey = `${fileToDelete.type}/${fileToDelete.name}`
-    console.log(
-      `RightSidebar: Delete requested for file: ${fileToDelete.name} (${fileToDelete.type}), Key: ${fileKey}`
-    )
-
     modals.openConfirmModal({
       title: `Delete Script File?`,
       centered: true,
       children: (
         <Text size='sm'>
-          {' '}
           Are you sure you want to delete the file "{fileToDelete.name}.lua" (
           {fileToDelete.type})? All nodes within this file's graph will be lost.
-          This action cannot be undone.{' '}
+          This action cannot be undone.
         </Text>
       ),
       labels: { confirm: 'Delete File', cancel: 'Cancel' },
       confirmProps: { color: 'red' },
       onConfirm: () => {
-        console.log(
-          `RightSidebar: Deletion CONFIRMED for: ${fileToDelete.name}. Calling onDeleteFile prop.`
-        )
         try {
-          onDeleteFile(fileToDelete) // Call App's handler
+          onDeleteFile(fileToDelete)
           notifications.show({
             title: 'File Deleted',
             message: `Successfully deleted "${fileToDelete.name}.lua".`,
@@ -93,10 +79,7 @@ export default function RightSidebar ({
             autoClose: 3000
           })
         } catch (error) {
-          console.error(
-            'RightSidebar: Error occurred during onDeleteFile call:',
-            error
-          )
+          console.error('RightSidebar: Error occurred during onDeleteFile call:', error)
           notifications.show({
             title: 'Deletion Error',
             message: `Could not delete file "${fileToDelete.name}.lua". Check console.`,
@@ -104,10 +87,6 @@ export default function RightSidebar ({
           })
         }
       },
-      onCancel: () =>
-        console.log(
-          `RightSidebar: Deletion cancelled for: ${fileToDelete.name}.`
-        )
     })
   }
 
@@ -116,10 +95,11 @@ export default function RightSidebar ({
       w={300}
       p='md'
       shadow='xs'
-      withBorder
       style={{
-        backgroundColor: '#1A1B1E',
-        borderRadius: 'var(--mantine-radius-md)',
+        backgroundColor: 'var(--mantine-color-dark-7)',
+        border: 'none',
+        borderLeft: '1px solid var(--mantine-color-dark-4)',
+        borderRadius: 0,
         overflow: 'hidden',
         height: '100%',
         display: 'flex',
@@ -135,12 +115,10 @@ export default function RightSidebar ({
         fullWidth
         radius='sm'
       >
-        {' '}
-        Create Script File{' '}
+        Create Script File
       </Button>
       <Text size='xs' fw={700} c='dimmed' mb='xs' px='xs' tt='uppercase'>
-        {' '}
-        Script Files{' '}
+        Script Files
       </Text>
 
       <Box
@@ -161,10 +139,7 @@ export default function RightSidebar ({
           {files.map(file => {
             const fileKey = `${file.type}/${file.name}`
             const isSelected = selectedGraphKey === fileKey
-            const typeColor =
-              file.type === 'client' ? clientBgColor : serverBgColor
-            const bgColor = isSelected ? typeColor : defaultBgColor
-            const textColor = isSelected ? selectedTextColor : defaultTextColor
+            const typeColor = file.type === 'client' ? clientBgColor : serverBgColor
             const icon =
               file.type === 'client' ? (
                 <IconDeviceLaptop size='1rem' stroke={1.5} />
@@ -176,14 +151,13 @@ export default function RightSidebar ({
               <Box
                 key={fileKey}
                 onClick={() => handleSelectFile(file)}
-                bg={bgColor}
-                p='xs'
                 className={classes.fileItem}
+                data-selected={isSelected}
                 style={{
-                  border: isSelected
-                    ? `1px solid ${typeColor}`
-                    : '1px solid transparent'
-                }}
+                  '--item-bg-color': isSelected ? typeColor : 'var(--mantine-color-dark-6)',
+                  '--item-border-color': isSelected ? typeColor : 'transparent',
+                  '--item-text-color': isSelected ? selectedTextColor : defaultTextColor,
+                } as React.CSSProperties}
               >
                 <Group
                   gap='xs'
@@ -191,7 +165,7 @@ export default function RightSidebar ({
                   wrap='nowrap'
                   style={{ overflow: 'hidden', flex: 1, marginRight: '8px' }}
                 >
-                  <Box c={textColor} style={{ flexShrink: 0 }}>
+                  <Box c={isSelected ? 'white' : typeColor} style={{ flexShrink: 0 }}>
                     {icon}
                   </Box>
                   <Tooltip
@@ -200,25 +174,22 @@ export default function RightSidebar ({
                     withArrow
                   >
                     <Text
-                      c={textColor}
+                      c="var(--item-text-color)"
                       fw={isSelected ? 600 : 400}
                       size='sm'
                       truncate
                     >
-                      {' '}
-                      {file.name}.lua{' '}
+                      {file.name}.lua
                     </Text>
                   </Tooltip>
                 </Group>
 
-                {/* Type Badge and Delete Button Group */}
                 <Group
                   gap='xs'
                   align='center'
                   wrap='nowrap'
                   style={{ flexShrink: 0 }}
                 >
-                  {/* ... Optional Badge ... */}
                   <Tooltip
                     label={`Delete ${file.name}.lua`}
                     withArrow
